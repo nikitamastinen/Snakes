@@ -1,4 +1,5 @@
 import logging
+from random import randint
 from typing import List
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi_utils.tasks import repeat_every
@@ -6,6 +7,9 @@ from starlette.templating import Jinja2Templates
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates/")
+
+field = [[set() for _ in range(41)] for _ in range(41)]
+food = set()
 
 
 class ConnectionManager:
@@ -17,23 +21,45 @@ class ConnectionManager:
         await websocket.accept()
         self.active_connections.append((websocket, client_id))
 
-    def disconnect(self, websocket: WebSocket, client_id: int):
+    async def send_food(self):
+        x = randint(0, 39) * 10
+        y = randint(0, 39) * 10
+        food.add((x, y))
+        print(f'food {x} {y}')
+        await self.broadcast(f'food {x} {y}')
+
+    async def disconnect(self, websocket: WebSocket, client_id: int):
         self.active_connections.remove((websocket, client_id))
+        for i in range(len(field)):
+            for j in range(len(field[i])):
+                if client_id in field[i][j]:
+                    field[i][j].remove(client_id)
+        for connection, _ in self.active_connections:
+            try:
+                await connection.send_text(f'delete {client_id}')
+            except Exception:
+                pass
 
     async def broadcast(self, message: str):
         for connection, _ in self.active_connections:
-            await connection.send_text(message)
+            try:
+                await connection.send_text(message)
+            except RuntimeError:
+                pass
 
     async def send_history(self, websocket: WebSocket):
         for i in range(len(field)):
             for j in range(len(field[i])):
-                for id in field[i][j]:
-                    await websocket.send_text(f'add {i * 10} {j * 10} {id}')
-
-
-    # async def submit_coords(self, coords):
-    #     for connection in self.active_connections:
-    #         await connection.send_text(coords[0] + ' ' + coords[1])
+                for client_id in field[i][j]:
+                    try:
+                        await websocket.send_text(f'add {i * 10} {j * 10} {client_id}')
+                    except RuntimeError:
+                        pass
+        for (x, y) in food:
+            try:
+                await websocket.send_text(f'food {x} {y}')
+            except:
+                pass
 
 
 manager = ConnectionManager()
@@ -47,36 +73,56 @@ async def get(request: Request):
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: int):
     await manager.connect(websocket, client_id)
-    print('success')
     try:
         await manager.send_history(websocket)
+        fl = False
         while True:
             data = await websocket.receive_text()
+            if not fl:
+                await manager.send_history(websocket)
+                fl = True
             query = [i for i in data.split(' ')]
-            if query[0] == 'pop':
+            if query[0] == 'pop' and int(query[3]) in field[int(query[1]) // 10][int(query[2]) // 10]:
                 field[int(query[1]) // 10][int(query[2]) // 10].remove(int(query[3]))
             if query[0] == 'add':
                 field[int(query[1]) // 10][int(query[2]) // 10].add(int(query[3]))
+            if query[0] == 'delete':
+                for i in field:
+                    for j in i:
+                        if int(query[1]) in j:
+                            j.remove(int(query[1]))
+                            continue
+            if query[0] == 'popadd':
+                field[int(query[1]) // 10][int(query[2]) // 10].add(int(query[3]))
+                if int(query[3]) in field[int(query[4]) // 10][int(query[5]) // 10]:
+                    field[int(query[4]) // 10][int(query[5]) // 10].remove(int(query[3]))
+            if query[0] == 'popfood':
+                print(str(query[1]) + ' ' + str(query[2]))
+                if (int(query[1]), int(query[2])) in food:
+                    food.remove((int(query[1]), int(query[2])))
             await manager.broadcast(f"{data}")
-            print(field)
     except WebSocketDisconnect:
-        manager.disconnect(websocket, client_id)
-        pass
-    except Exception:
-        pass
-        #await manager.broadcast(f"Client #{client_id} left the chat")
+        await manager.disconnect(websocket, client_id)
+    except IndexError:
+        print("KEKEKEKEK")
+        await manager.disconnect(websocket, client_id)
 
 
-counter = 0
+@app.on_event("startup")
+@repeat_every(seconds=4, logger=logging.getLogger(__name__), wait_first=True)
+async def periodic():
+    await manager.send_food()
+    for i in field:
+        for j in i:
+            bad = []
+            for k in j:
+                if k not in [i for _, i in manager.active_connections]:
+                    bad.append(k)
+            for b in bad:
+                j.remove(b)
+                try:
+                    await manager.broadcast(f'delete {b}')
+                except:
+                    pass
+    #manager.submit_coords((0, min(counter, 40)))
 
-field = [[set()] * 40 for _ in range(40)]
-
-
-# @app.on_event("startup")
-# @repeat_every(seconds=10, logger=logging.getLogger(__name__), wait_first=True)
-# def periodic():
-#     global counter
-#     print('counter is', counter)
-#     field[0][min(counter, 40)] += 1
-#     #manager.submit_coords((0, min(counter, 40)))
-#     counter += 1
