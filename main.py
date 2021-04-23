@@ -29,7 +29,8 @@ class ConnectionManager:
         await self.broadcast(f'food {x} {y}')
 
     async def disconnect(self, websocket: WebSocket, client_id: int):
-        self.active_connections.remove((websocket, client_id))
+        if (websocket, client_id) in self.active_connections:
+            self.active_connections.remove((websocket, client_id))
         for i in range(len(field)):
             for j in range(len(field[i])):
                 if client_id in field[i][j]:
@@ -87,11 +88,16 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
             if query[0] == 'add':
                 field[int(query[1]) // 10][int(query[2]) // 10].add(int(query[3]))
             if query[0] == 'delete':
+                for (connection, ind) in manager.active_connections:
+                    if ind == int(query[1]):
+                        manager.active_connections.remove((connection, ind))
+                        break
                 for i in field:
                     for j in i:
                         if int(query[1]) in j:
                             j.remove(int(query[1]))
                             continue
+
             if query[0] == 'popadd':
                 field[int(query[1]) // 10][int(query[2]) // 10].add(int(query[3]))
                 if int(query[3]) in field[int(query[4]) // 10][int(query[5]) // 10]:
@@ -109,7 +115,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
 
 
 @app.on_event("startup")
-@repeat_every(seconds=4, logger=logging.getLogger(__name__), wait_first=True)
+@repeat_every(seconds=1, logger=logging.getLogger(__name__), wait_first=True)
 async def periodic():
     await manager.send_food()
     for i in field:
