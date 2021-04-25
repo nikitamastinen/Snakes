@@ -8,7 +8,7 @@ from starlette.templating import Jinja2Templates
 app = FastAPI()
 templates = Jinja2Templates(directory="templates/")
 
-field = [[set() for _ in range(41)] for _ in range(41)]
+field = [[set() for _ in range(61)] for _ in range(61)]
 food = set()
 
 
@@ -22,11 +22,12 @@ class ConnectionManager:
         self.active_connections.append((websocket, client_id))
 
     async def send_food(self):
-        x = randint(0, 39) * 10
-        y = randint(0, 39) * 10
-        food.add((x, y))
-        print(f'food {x} {y}')
-        await self.broadcast(f'food {x} {y}')
+        x = randint(1, 60) * 10
+        y = randint(1, 60) * 10
+        if (x, y) not in food:
+            food.add((x, y))
+            print(f'food {x} {y}')
+            await self.broadcast(f'food {x} {y}')
 
     async def disconnect(self, websocket: WebSocket, client_id: int):
         if (websocket, client_id) in self.active_connections:
@@ -71,8 +72,9 @@ async def get(request: Request):
     return templates.TemplateResponse('init_page.html', context={'request': request})
 
 
-@app.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: int):
+@app.websocket("/ws/{client_id}/{action_type}")
+async def websocket_endpoint(websocket: WebSocket, client_id: int, action_type: str):
+    print(action_type)
     await manager.connect(websocket, client_id)
     try:
         await manager.send_history(websocket)
@@ -115,7 +117,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
 
 
 @app.on_event("startup")
-@repeat_every(seconds=1, logger=logging.getLogger(__name__), wait_first=True)
+@repeat_every(seconds=4, logger=logging.getLogger(__name__), wait_first=True)
 async def periodic():
     await manager.send_food()
     for i in field:

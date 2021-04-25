@@ -3,11 +3,60 @@
   <head>
   	<title>Snake Game</title>
   </head>
+<style type="text/css">
 
+body {
+  background: linear-gradient(45deg, lightgreen, lightblue);
+}
+</style>
   <body>
 
     <div id="score">0</div>
-    <canvas id="snakeboard" width="400" height="400"></canvas>
+
+<div id="loader"></div>
+    .<style>
+/* Center the loader */
+
+#loader {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  width: 120px;
+  height: 120px;
+  margin: -76px 0 0 -76px;
+  border: 16px solid #f3f3f3;
+  border-radius: 50%;
+  border-top: 16px solid lightgreen;
+  -webkit-animation: spin 2s linear infinite;
+  animation: spin 2s linear infinite;
+}
+
+@-webkit-keyframes spin {
+  0% { -webkit-transform: rotate(0deg); }
+  100% { -webkit-transform: rotate(360deg); }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@-webkit-keyframes animatebottom {
+  from { bottom:-100px; opacity:0 }
+  to { bottom:0px; opacity:1 }
+}
+
+@keyframes animatebottom {
+  from{ bottom:-100px; opacity:0 }
+  to{ bottom:0; opacity:1 }
+}
+
+</style>
+
+
+
+    <canvas id="snakeboard" width="600" height="600"></canvas>
 
     <style>
       #snakeboard {
@@ -21,7 +70,7 @@
 
   <script>
     const client_id = Date.now()
-    const socket = new WebSocket(`ws://93.175.2.219:80/ws/${client_id}`);
+    const socket = new WebSocket(`ws://93.175.2.219:80/ws/${client_id}/game`);
     function waitForSocketConnection() {
       const timer = setTimeout(
         function () {
@@ -37,10 +86,11 @@
     }
     waitForSocketConnection();
     function run() {
+        let update_rate = 100;
       const board_border = 'black';
-      const board_background = "white";
+      const board_background = "lightcyan";
       //const snake_col = 'lightblue';
-      var colors = ['#0000FF', '#27e024', '#b6d11f', '#2485bd', '#bd9e24', '#ae24bd'];
+      var colors = ['yellow', 'red', 'blue', 'white'];
       const snake_col = colors[client_id % colors.length];
       const snake_border = 'darkblue';
 
@@ -101,12 +151,23 @@
         while (new Date().getTime() - startPoint <= ms) {/* wait */}
       }
       main();
+
+      function decrease_update_rate(event) {
+          const SPACE = 32;
+          const keyPressed = event.keyCode;
+          if (keyPressed === SPACE) {
+            update_rate = 120;
+          }
+      }
+
       document.addEventListener("keydown", change_direction);
+      document.addEventListener("keyup", decrease_update_rate);
 
 
       function main() {
         if (isFirstRun) {
           delay(1000);
+          document.getElementById("loader").style.display = "none";
           isFirstRun = false;
         }
         if (has_game_ended()) return;
@@ -118,7 +179,7 @@
           move_snake();
           drawSnake();
           main();
-        }, 80)
+        }, update_rate)
       }
 
       function clear_board() {
@@ -189,11 +250,17 @@
         const RIGHT_KEY = 39;
         const UP_KEY = 38;
         const DOWN_KEY = 40;
+        const SPACE = 32;
+        const keyPressed = event.keyCode;
+        if (keyPressed === SPACE) {
+          update_rate = 40;
+          return;
+        }
         if (changing_direction) {
           return;
         }
         changing_direction = true;
-        const keyPressed = event.keyCode;
+        //const keyPressed = event.keyCode;
         const goingUp = dy === -10;
         const goingDown = dy === 10;
         const goingRight = dx === 10;
