@@ -14,7 +14,6 @@ food = set()
 
 class ConnectionManager:
     def __init__(self):
-        self.HISTORY = []
         self.active_connections: List[(WebSocket, int)] = []
 
     async def connect(self, websocket: WebSocket, client_id: int):
@@ -22,11 +21,10 @@ class ConnectionManager:
         self.active_connections.append((websocket, client_id))
 
     async def send_food(self):
-        x = randint(1, 60) * 10
-        y = randint(1, 60) * 10
+        x = randint(1, 60)
+        y = randint(1, 60)
         if (x, y) not in food:
             food.add((x, y))
-            print(f'food {x} {y}')
             await self.broadcast(f'food {x} {y}')
 
     async def disconnect(self, websocket: WebSocket, client_id: int):
@@ -69,12 +67,11 @@ manager = ConnectionManager()
 
 @app.get("/")
 async def get(request: Request):
-    return templates.TemplateResponse('init_page.html', context={'request': request})
+    return templates.TemplateResponse('game.html', context={'request': request, 'address': '127.0.0.1:8000'})
 
 
 @app.websocket("/ws/{client_id}/{action_type}")
 async def websocket_endpoint(websocket: WebSocket, client_id: int, action_type: str):
-    print(action_type)
     await manager.connect(websocket, client_id)
     try:
         await manager.send_history(websocket)
@@ -85,11 +82,11 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int, action_type: 
                 await manager.send_history(websocket)
                 fl = True
             query = [i for i in data.split(' ')]
-            if query[0] == 'pop' and int(query[3]) in field[int(query[1]) // 10][int(query[2]) // 10]:
-                field[int(query[1]) // 10][int(query[2]) // 10].remove(int(query[3]))
-            if query[0] == 'add':
-                field[int(query[1]) // 10][int(query[2]) // 10].add(int(query[3]))
-            if query[0] == 'delete':
+            if query[0] == 'pop' and int(query[3]) in field[int(query[1])][int(query[2])]:
+                field[int(query[1])][int(query[2])].remove(int(query[3]))
+            elif query[0] == 'add':
+                field[int(query[1])][int(query[2])].add(int(query[3]))
+            elif query[0] == 'delete':
                 for (connection, ind) in manager.active_connections:
                     if ind == int(query[1]):
                         manager.active_connections.remove((connection, ind))
@@ -99,25 +96,22 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int, action_type: 
                         if int(query[1]) in j:
                             j.remove(int(query[1]))
                             continue
-
-            if query[0] == 'popadd':
-                field[int(query[1]) // 10][int(query[2]) // 10].add(int(query[3]))
-                if int(query[3]) in field[int(query[4]) // 10][int(query[5]) // 10]:
-                    field[int(query[4]) // 10][int(query[5]) // 10].remove(int(query[3]))
-            if query[0] == 'popfood':
-                print(str(query[1]) + ' ' + str(query[2]))
+            elif query[0] == 'popadd':
+                field[int(query[1])][int(query[2])].add(int(query[3]))
+                if int(query[3]) in field[int(query[4])][int(query[5])]:
+                    field[int(query[4])][int(query[5])].remove(int(query[3]))
+            elif query[0] == 'popfood':
                 if (int(query[1]), int(query[2])) in food:
                     food.remove((int(query[1]), int(query[2])))
             await manager.broadcast(f"{data}")
     except WebSocketDisconnect:
         await manager.disconnect(websocket, client_id)
     except IndexError:
-        print("KEKEKEKEK")
         await manager.disconnect(websocket, client_id)
 
 
 @app.on_event("startup")
-@repeat_every(seconds=4, logger=logging.getLogger(__name__), wait_first=True)
+@repeat_every(seconds=3, logger=logging.getLogger(__name__), wait_first=True)
 async def periodic():
     await manager.send_food()
     for i in field:
@@ -130,7 +124,5 @@ async def periodic():
                 j.remove(b)
                 try:
                     await manager.broadcast(f'delete {b}')
-                except:
+                except Exception:
                     pass
-    #manager.submit_coords((0, min(counter, 40)))
-
