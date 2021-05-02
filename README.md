@@ -1,4 +1,4 @@
 # Snakes
 Snakes ONLINE multiplayer
 
-![alt text]()
+![](https://github.com/nikitamastinen/Snakes/blob/dev/screenshots/1.jpg)
