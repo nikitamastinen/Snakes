@@ -70,7 +70,7 @@ body {
 
   <script>
     const client_id = Date.now()
-    const socket = new WebSocket(`ws://{{address}}/ws/${client_id}/game`);
+    const socket = new WebSocket(`wss://{{address}}/ws/${client_id}/game`);
     function waitForSocketConnection() {
       const timer = setTimeout(
         function () {
