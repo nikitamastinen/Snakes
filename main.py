@@ -67,7 +67,7 @@ manager = ConnectionManager()
 
 @app.get("/")
 async def get(request: Request):
-    return templates.TemplateResponse('game.html', context={'request': request, 'address': '127.0.0.1:8000'})
+    return templates.TemplateResponse('game.html', context={'request': request, 'address': '0.0.0.0:8000'})
 
 
 @app.websocket("/ws/{client_id}/{action_type}")
