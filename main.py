@@ -58,7 +58,6 @@ class ConnectionManager:
                 for client_id in field[i][j]:
                     try:
                         await websocket.send_text(f'add {i * 10} {j * 10} {client_id} {usernames[client_id]}')
-                        print(usernames[client_id])
                     except RuntimeError:
                         pass
         for (x, y) in food:
@@ -88,6 +87,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int, username: str
         fl = False
         while True:
             data = await websocket.receive_text()
+            print(data)
             if not fl:
                 await manager.send_history(websocket)
                 fl = True
@@ -96,16 +96,22 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int, username: str
                 field[int(query[1])][int(query[2])].remove(int(query[3]))
             elif query[0] == 'add':
                 if len(field[int(query[1])][int(query[2])]) != 0:
-                    for (connection, ind) in manager.active_connections:
-                        if ind == int(query[3]):
-                            manager.active_connections.remove((connection, ind))
-                            break
-                    for i in range(len(field)):
-                        for j in range(len(field[i])):
-                            if int(query[3]) in field[i][j]:
-                                field[i][j].remove(query[i][j])
-                                await manager.send_food_item(i, j)
-                    data = f'delete {int(query[3])}'
+                    if len(field[int(query[1])][int(query[2])]) != 0:
+                        print("deleted: " + str(client_id))
+                        current_food = []
+                        for i in range(len(field)):
+                            for j in range(len(field[i])):
+                                print("TRY: " + str(client_id) + ' ' + str(field[i][j]))
+                                if client_id in field[i][j]:
+                                    field[i][j].remove(int(query[3]))
+                                    print("kkk")
+                                    current_food.append((i, j))
+                        for (connection, ind) in manager.active_connections:
+                            if ind == int(query[3]):
+                                manager.active_connections.remove((connection, ind))
+                                break
+                        for x, y in current_food:
+                            await manager.send_food_item(x, y)
                 else:
                     field[int(query[1])][int(query[2])].add(int(query[3]))
             elif query[0] == 'delete':
@@ -120,15 +126,23 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int, username: str
                             continue
             elif query[0] == 'popadd':
                 if len(field[int(query[1])][int(query[2])]) != 0:
+                    print("deleted: " + str(client_id))
+
+                    current_food = []
+                    for i in range(len(field)):
+                        for j in range(len(field[i])):
+                            print("TRY: " + str(client_id) + ' ' + str(field[i][j]))
+                            if client_id in field[i][j]:
+                                field[i][j].remove(int(query[3]))
+                                print("kkk")
+                                current_food.append((i, j))
+                        print()
                     for (connection, ind) in manager.active_connections:
                         if ind == int(query[3]):
                             manager.active_connections.remove((connection, ind))
                             break
-                    for i in range(len(field)):
-                        for j in range(len(field[i])):
-                            if int(query[3]) in field[i][j]:
-                                field[i][j].remove(query[i][j])
-                                await manager.send_food_item(i, j)
+                    for x, y in current_food:
+                        await manager.send_food_item(x, y)
                     data = f'delete {int(query[3])}'
                 else:
                     field[int(query[1])][int(query[2])].add(int(query[3]))
@@ -145,7 +159,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int, username: str
 
 
 @app.on_event("startup")
-@repeat_every(seconds=6, logger=logging.getLogger(__name__), wait_first=True)
+@repeat_every(seconds=1, logger=logging.getLogger(__name__), wait_first=True)
 async def periodic():
     await manager.send_food()
     for i in field:

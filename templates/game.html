@@ -89,6 +89,7 @@ body {
         let update_rate = 100;
       const board_border = 'black';
       const board_background = "lightcyan";
+      let FINISH = false
       //const snake_col = 'lightblue';
       var colors = ['yellow', 'red', 'blue', 'white'];
       const snake_col = colors[client_id % colors.length];
@@ -113,6 +114,7 @@ body {
         const coords = event.data.split(' ');
         if (coords[0] === "delete") {
           delete SNAKES[coords[1]];
+          FINISH = true;
         } else if (parseInt(coords[3]) !== client_id) {
           if (SNAKES[coords[3]] == null) {
             SNAKES[coords[3]] = [];
@@ -165,6 +167,9 @@ body {
 
 
       function main() {
+          if (FINISH) {
+              return;
+          }
         if (isFirstRun) {
           delay(1000);
           document.getElementById("loader").style.display = "none";
