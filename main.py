@@ -9,6 +9,7 @@ app = FastAPI()
 templates = Jinja2Templates(directory="templates/")
 
 field = [[set() for _ in range(61)] for _ in range(61)]
+usernames = {}
 food = set()
 
 
@@ -23,6 +24,9 @@ class ConnectionManager:
     async def send_food(self):
         x = randint(1, 60)
         y = randint(1, 60)
+        await self.send_food_item(x, y)
+
+    async def send_food_item(self, x, y):
         if (x, y) not in food:
             food.add((x, y))
             await self.broadcast(f'food {x} {y}')
@@ -30,6 +34,7 @@ class ConnectionManager:
     async def disconnect(self, websocket: WebSocket, client_id: int):
         if (websocket, client_id) in self.active_connections:
             self.active_connections.remove((websocket, client_id))
+        usernames.pop(client_id)
         for i in range(len(field)):
             for j in range(len(field[i])):
                 if client_id in field[i][j]:
@@ -52,7 +57,8 @@ class ConnectionManager:
             for j in range(len(field[i])):
                 for client_id in field[i][j]:
                     try:
-                        await websocket.send_text(f'add {i * 10} {j * 10} {client_id}')
+                        await websocket.send_text(f'add {i * 10} {j * 10} {client_id} {usernames[client_id]}')
+                        print(usernames[client_id])
                     except RuntimeError:
                         pass
         for (x, y) in food:
@@ -67,12 +73,16 @@ manager = ConnectionManager()
 
 @app.get("/")
 async def get(request: Request):
-    return templates.TemplateResponse('game.html', context={'request': request, 'address': 'hungry-snakes.herokuapp.com'})
+    # TODO address = 'hungry-snakes.herokuapp.com'
+    address = '93.175.2.219'
+    return templates.TemplateResponse('game.html', context={'request': request, 'address': address})
 
 
-@app.websocket("/ws/{client_id}/{action_type}")
-async def websocket_endpoint(websocket: WebSocket, client_id: int, action_type: str):
+@app.websocket("/ws/{client_id}/{username}")
+@app.websocket("/ws/{client_id}/")
+async def websocket_endpoint(websocket: WebSocket, client_id: int, username: str = ''):
     await manager.connect(websocket, client_id)
+    usernames[client_id] = username
     try:
         await manager.send_history(websocket)
         fl = False
@@ -85,7 +95,19 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int, action_type: 
             if query[0] == 'pop' and int(query[3]) in field[int(query[1])][int(query[2])]:
                 field[int(query[1])][int(query[2])].remove(int(query[3]))
             elif query[0] == 'add':
-                field[int(query[1])][int(query[2])].add(int(query[3]))
+                if len(field[int(query[1])][int(query[2])]) != 0:
+                    for (connection, ind) in manager.active_connections:
+                        if ind == int(query[3]):
+                            manager.active_connections.remove((connection, ind))
+                            break
+                    for i in range(len(field)):
+                        for j in range(len(field[i])):
+                            if int(query[3]) in field[i][j]:
+                                field[i][j].remove(query[i][j])
+                                await manager.send_food_item(i, j)
+                    data = f'delete {int(query[3])}'
+                else:
+                    field[int(query[1])][int(query[2])].add(int(query[3]))
             elif query[0] == 'delete':
                 for (connection, ind) in manager.active_connections:
                     if ind == int(query[1]):
@@ -97,9 +119,21 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int, action_type: 
                             j.remove(int(query[1]))
                             continue
             elif query[0] == 'popadd':
-                field[int(query[1])][int(query[2])].add(int(query[3]))
-                if int(query[3]) in field[int(query[4])][int(query[5])]:
-                    field[int(query[4])][int(query[5])].remove(int(query[3]))
+                if len(field[int(query[1])][int(query[2])]) != 0:
+                    for (connection, ind) in manager.active_connections:
+                        if ind == int(query[3]):
+                            manager.active_connections.remove((connection, ind))
+                            break
+                    for i in range(len(field)):
+                        for j in range(len(field[i])):
+                            if int(query[3]) in field[i][j]:
+                                field[i][j].remove(query[i][j])
+                                await manager.send_food_item(i, j)
+                    data = f'delete {int(query[3])}'
+                else:
+                    field[int(query[1])][int(query[2])].add(int(query[3]))
+                    if int(query[3]) in field[int(query[4])][int(query[5])]:
+                        field[int(query[4])][int(query[5])].remove(int(query[3]))
             elif query[0] == 'popfood':
                 if (int(query[1]), int(query[2])) in food:
                     food.remove((int(query[1]), int(query[2])))
@@ -111,7 +145,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int, action_type: 
 
 
 @app.on_event("startup")
-@repeat_every(seconds=3, logger=logging.getLogger(__name__), wait_first=True)
+@repeat_every(seconds=6, logger=logging.getLogger(__name__), wait_first=True)
 async def periodic():
     await manager.send_food()
     for i in field:
