@@ -159,7 +159,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int, username: str
 
 
 @app.on_event("startup")
-@repeat_every(seconds=1, logger=logging.getLogger(__name__), wait_first=True)
+@repeat_every(seconds=10, logger=logging.getLogger(__name__), wait_first=True)
 async def periodic():
     await manager.send_food()
     for i in field:
